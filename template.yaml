@@ -1,0 +1,141 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  mlpipeline
+Transform:
+- AWS::Serverless-2016-10-31
+
+Parameters:
+  NEPTUNEENDPOINT: 
+    NoEcho: true
+    Description: "Neptune cluster endpoint"
+    Type: String
+    Default: "neptunedbcluster-l6lv2os8pavt.cluster-c9ateafzwuon.us-east-1.neptune.amazonaws.com"
+  NEPTUNEPORT: 
+    NoEcho: true
+    Description: "Neptune cluster port"
+    Type: String
+    Default: "8182"
+  NEPTUNEEXPORTURL: 
+    NoEcho: true
+    Description: "Neptune export service  api endpoint"
+    Type: String
+    Default: "102gm69f3f.execute-api.us-east-1.amazonaws.com"
+  NEPTUNEMLOPSDYNAMODBTABLE: 
+    NoEcho: true
+    Description: "Neptune ML Ops DynamoDB table"
+    Type: String
+    Default: "NeptuneMLOps"
+Resources:
+  putjob:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/putjob.handler
+      Runtime: nodejs14.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 100
+      Description: A simple example includes a HTTP get method to get all items from a DynamoDB table.
+      Policies:
+        - AWSLambda_FullAccess
+        - NeptuneFullAccess
+        - AmazonDynamoDBFullAccess
+        - AmazonSageMakerFullAccess
+        - AmazonAPIGatewayInvokeFullAccess
+      Environment:
+        Variables:
+          NEPTUNEENDPOINT: !Ref NEPTUNEENDPOINT
+          NEPTUNEPORT: !Ref NEPTUNEPORT
+          NEPTUNEEXPORTURL: !Ref NEPTUNEEXPORTURL
+          NEPTUNEMLOPSDYNAMODBTABLE: !Ref NEPTUNEMLOPSDYNAMODBTABLE
+      VpcConfig:
+          SecurityGroupIds:
+            - sg-0cc09d92491c9dce6
+          SubnetIds:
+            - subnet-091f9505f45835a38
+            - subnet-0ff5ada7270358a80
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /
+            Method: POST
+  putjobpart:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/putjobpart.handler
+      Runtime: nodejs14.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 100
+      Description: ML Op.
+      Policies:
+        # Give Create/Read/Update/Delete Permissions to the SampleTable
+        - AWSLambda_FullAccess
+        - NeptuneFullAccess
+        - AmazonDynamoDBFullAccess
+        - AmazonSageMakerFullAccess
+        - AmazonAPIGatewayInvokeFullAccess
+      VpcConfig:
+          SecurityGroupIds:
+            - sg-0cc09d92491c9dce6
+          SubnetIds:
+            - subnet-091f9505f45835a38
+            - subnet-0ff5ada7270358a80
+      Environment:
+        Variables:
+          NEPTUNEENDPOINT: !Ref NEPTUNEENDPOINT
+          NEPTUNEPORT: !Ref NEPTUNEPORT
+          NEPTUNEEXPORTURL: !Ref NEPTUNEEXPORTURL
+          NEPTUNEMLOPSDYNAMODBTABLE: !Ref NEPTUNEMLOPSDYNAMODBTABLE
+  
+  getJobpartFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/getjobpart.handler
+      Runtime: nodejs14.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 100
+      Description: A simple example includes a HTTP post method to add one item to a DynamoDB table.
+      Policies:
+        # Give Create/Read/Update/Delete Permissions to the SampleTable
+        - AWSLambda_FullAccess
+        - NeptuneFullAccess
+        - AmazonDynamoDBFullAccess
+        - AmazonSageMakerFullAccess
+        - AmazonAPIGatewayInvokeFullAccess
+      VpcConfig:
+          SecurityGroupIds:
+            - sg-0cc09d92491c9dce6
+          SubnetIds:
+            - subnet-091f9505f45835a38
+            - subnet-0ff5ada7270358a80
+      Environment:
+        Variables:
+          NEPTUNEENDPOINT: !Ref NEPTUNEENDPOINT
+          NEPTUNEPORT: !Ref NEPTUNEPORT
+          NEPTUNEEXPORTURL: !Ref NEPTUNEEXPORTURL
+          NEPTUNEMLOPSDYNAMODBTABLE: !Ref NEPTUNEMLOPSDYNAMODBTABLE
+
+  NeptuneMLOpsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref NEPTUNEMLOPSDYNAMODBTABLE
+      KeySchema: 
+        - 
+          AttributeName: "jobid"
+          KeyType: "HASH"
+        - 
+          AttributeName: "jobstep"
+          KeyType: "RANGE"
+      ProvisionedThroughput:
+        ReadCapacityUnits: 2
+        WriteCapacityUnits: 2
+
+Outputs:
+  WebEndpoint:
+    Description: "API Gateway endpoint URL for Prod stage"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"

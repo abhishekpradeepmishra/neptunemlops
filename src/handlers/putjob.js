@@ -5,20 +5,18 @@ const exportserviceurl = `https://${process.env.NEPTUNEEXPORTURL}/v1/neptune-exp
 const neptuneendpoint = `https://${process.env.NEPTUNEENDPOINT}:${process.env.NEPTUNEPORT}`;
 const axios = require('axios').default;
 const { v4: uuidv4 } = require('uuid');
-
 exports.handler = async (event) => {
-    if (event.httpMethod !== 'POST') {
-        throw new Error(`postMethod only accepts POST method, you tried: ${event.httpMethod} method.`);
-    }
-    // All log statements are written to CloudWatch
+    // if (event.httpMethod !== 'POST') {
+    //     throw new Error(`postMethod only accepts POST method, you tried: ${event.httpMethod} method.`);
+    // }
+    
+    console.log(tableName)
+    
     console.info('received:', event);
-
-    // Get id and name from the body of the request
     //const job = JSON.parse(event.body);
-
-    const job = event.body;
-    job.jobid = `mljob-${uuidv4()}`;
-    job.createdtimestamp = (new Date()).getTime();
+    const job = event;
+    // job.jobid = `mljob-${uuidv4()}`;
+    // job.createdtimestamp = (new Date()).getTime();
 
     var params = {
         RequestItems: {}
@@ -82,19 +80,12 @@ exports.handler = async (event) => {
         }
     ];
 
-
-
-
     await docClient.batchWrite(params).promise();
-
+    
     const response = {
         statusCode: 200,
         body: {
-            jobstep: job.jobstep,
-            jobid_export: job.part_export.job_id,
-            jobid_dataprocessing: job.part_dataprocessing.job_id,
-            jobid_training: job.part_training.job_id,
-            jobid_endpoint: job.part_endpoint.job_id
+            jobid: job.jobid
         }
     };
 

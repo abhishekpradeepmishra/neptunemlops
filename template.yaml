@@ -6,27 +6,23 @@ Transform:
 
 Parameters:
   NEPTUNEENDPOINT: 
-    NoEcho: true
     Description: "Neptune cluster endpoint"
     Type: String
     Default: "neptunedbcluster-l6lv2os8pavt.cluster-c9ateafzwuon.us-east-1.neptune.amazonaws.com"
   NEPTUNEPORT: 
-    NoEcho: true
     Description: "Neptune cluster port"
     Type: String
     Default: "8182"
-  NEPTUNEEXPORTURL: 
-    NoEcho: true
+  NEPTUNEEXPORTURL:
     Description: "Neptune export service  api endpoint"
     Type: String
     Default: "102gm69f3f.execute-api.us-east-1.amazonaws.com"
-  NEPTUNEMLOPSDYNAMODBTABLE: 
-    NoEcho: true
+  NEPTUNEMLOPSDYNAMODBTABLE:
     Description: "Neptune ML Ops DynamoDB table"
     Type: String
-    Default: "NeptuneMLOps"
+    Default: "mlopstesting1"
 Resources:
-  putjob:
+  PutJobLambda:
     Type: AWS::Serverless::Function
     Properties:
       Handler: src/handlers/putjob.handler
@@ -54,13 +50,8 @@ Resources:
           SubnetIds:
             - subnet-091f9505f45835a38
             - subnet-0ff5ada7270358a80
-      Events:
-        Api:
-          Type: Api
-          Properties:
-            Path: /
-            Method: POST
-  putjobpart:
+
+  PutJobPartLambda:
     Type: AWS::Serverless::Function
     Properties:
       Handler: src/handlers/putjobpart.handler
@@ -90,7 +81,7 @@ Resources:
           NEPTUNEEXPORTURL: !Ref NEPTUNEEXPORTURL
           NEPTUNEMLOPSDYNAMODBTABLE: !Ref NEPTUNEMLOPSDYNAMODBTABLE
   
-  getJobpartFunction:
+  GetJobPartLambda:
     Type: AWS::Serverless::Function
     Properties:
       Handler: src/handlers/getjobpart.handler
@@ -120,17 +111,399 @@ Resources:
           NEPTUNEEXPORTURL: !Ref NEPTUNEEXPORTURL
           NEPTUNEMLOPSDYNAMODBTABLE: !Ref NEPTUNEMLOPSDYNAMODBTABLE
 
+  InvokeStepFunctionLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/invokestepfunction.handler
+      Runtime: nodejs14.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 100
+      Description: ML Op.
+      Policies:
+        # Give Create/Read/Update/Delete Permissions to the SampleTable
+        - AWSLambda_FullAccess
+        - NeptuneFullAccess
+        - AmazonDynamoDBFullAccess
+        - AmazonSageMakerFullAccess
+        - AmazonAPIGatewayInvokeFullAccess
+        - AWSStepFunctionsFullAccess
+      VpcConfig:
+          SecurityGroupIds:
+            - sg-0cc09d92491c9dce6
+          SubnetIds:
+            - subnet-091f9505f45835a38
+            - subnet-0ff5ada7270358a80
+      Environment:
+        Variables:
+          STEPFUNCTIONARN: !GetAtt [MLOpsSateMachine, Arn ]
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /
+            Method: POST
+
+  StatesExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - !Sub states.${AWS::Region}.amazonaws.com
+            Action: "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: StatesExecutionPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "lambda:InvokeFunction"
+                Resource: "*"
+                
+  MLOpsSateMachine:
+    Type: "AWS::StepFunctions::StateMachine"
+    Properties:
+      DefinitionString:
+        !Sub
+          - |-
+            {
+              "Comment": "A description of my state machine",
+              "StartAt": "putmljob",
+              "States": {
+                "putmljob": {
+                  "Type": "Task",
+                  "Resource": "arn:aws:states:::lambda:invoke",
+                  "OutputPath": "$.Payload",
+                  "Parameters": {
+                     "FunctionName": "${PutJobLambdaArn}",
+                    "Payload.$": "$"
+                  },
+                  "Retry": [
+                    {
+                      "ErrorEquals": [
+                        "Lambda.ServiceException",
+                        "Lambda.AWSLambdaException",
+                        "Lambda.SdkClientException"
+                      ],
+                      "IntervalSeconds": 2,
+                      "MaxAttempts": 6,
+                      "BackoffRate": 2
+                    }
+                  ],
+                  "Next": "Choice"
+                },
+                "Choice": {
+                  "Type": "Choice",
+                  "Choices": [
+                    {
+                      "Variable": "$.statusCode",
+                      "NumericEquals": 200,
+                      "Next": "startexport"
+                    }
+                  ],
+                  "Default": "Fail"
+                },
+                "startexport": {
+                  "Type": "Task",
+                  "Resource": "arn:aws:states:::lambda:invoke",
+                  "OutputPath": "$.Payload",
+                  "Parameters": {
+                    "FunctionName": "${PutJobPartLambdaArn}",
+                    "Payload": {
+                      "jobid.$": "$.body.jobid",
+                      "jobstep": "export"
+                    }
+                  },
+                  "Retry": [
+                    {
+                      "ErrorEquals": [
+                        "Lambda.ServiceException",
+                        "Lambda.AWSLambdaException",
+                        "Lambda.SdkClientException"
+                      ],
+                      "IntervalSeconds": 2,
+                      "MaxAttempts": 6,
+                      "BackoffRate": 2
+                    }
+                  ],
+                  "Next": "checkstartjobstatus"
+                },
+                "checkstartjobstatus": {
+                  "Type": "Task",
+                  "Resource": "arn:aws:states:::lambda:invoke",
+                  "OutputPath": "$.Payload",
+                  "Parameters": {
+                    "Payload.$": "$",
+                    "FunctionName": "${GetJobPartLambdaArn}"
+                  },
+                  "Retry": [
+                    {
+                      "ErrorEquals": [
+                        "Lambda.ServiceException",
+                        "Lambda.AWSLambdaException",
+                        "Lambda.SdkClientException"
+                      ],
+                      "IntervalSeconds": 2,
+                      "MaxAttempts": 6,
+                      "BackoffRate": 2
+                    }
+                  ],
+                  "Next": "Choice1"
+                },
+                "Choice1": {
+                  "Type": "Choice",
+                  "Choices": [
+                    {
+                      "Variable": "$.status",
+                      "StringEquals": "complete",
+                      "Next": "startdataprocessing"
+                    },
+                    {
+                      "Variable": "$.status",
+                      "StringEquals": "inprogress",
+                      "Next": "Wait"
+                    }
+                  ]
+                },
+                "startdataprocessing": {
+                  "Type": "Task",
+                  "Resource": "arn:aws:states:::lambda:invoke",
+                  "OutputPath": "$.Payload",
+                  "Parameters": {
+                    "FunctionName": "${PutJobPartLambdaArn}",
+                    "Payload": {
+                      "jobid.$": "$.jobid",
+                      "jobstep": "dataprocessing",
+                      "s3_input_uri.$": "$.outputS3Uri"
+                    }
+                  },
+                  "Retry": [
+                    {
+                      "ErrorEquals": [
+                        "Lambda.ServiceException",
+                        "Lambda.AWSLambdaException",
+                        "Lambda.SdkClientException"
+                      ],
+                      "IntervalSeconds": 2,
+                      "MaxAttempts": 6,
+                      "BackoffRate": 2
+                    }
+                  ],
+                  "Next": "checkdataprocessingstatus"
+                },
+                "checkdataprocessingstatus": {
+                  "Type": "Task",
+                  "Resource": "arn:aws:states:::lambda:invoke",
+                  "OutputPath": "$.Payload",
+                  "Parameters": {
+                    "Payload.$": "$",
+                    "FunctionName": "${GetJobPartLambdaArn}"
+                  },
+                  "Retry": [
+                    {
+                      "ErrorEquals": [
+                        "Lambda.ServiceException",
+                        "Lambda.AWSLambdaException",
+                        "Lambda.SdkClientException"
+                      ],
+                      "IntervalSeconds": 2,
+                      "MaxAttempts": 6,
+                      "BackoffRate": 2
+                    }
+                  ],
+                  "Next": "Choice2"
+                },
+                "Choice2": {
+                  "Type": "Choice",
+                  "Choices": [
+                    {
+                      "Variable": "$.status",
+                      "StringEquals": "complete",
+                      "Next": "starttrainingjob"
+                    },
+                    {
+                      "Variable": "$.status",
+                      "StringEquals": "inprogress",
+                      "Next": "Wait (1)"
+                    }
+                  ]
+                },
+                "starttrainingjob": {
+                  "Type": "Task",
+                  "Resource": "arn:aws:states:::lambda:invoke",
+                  "OutputPath": "$.Payload",
+                  "Parameters": {
+                    "FunctionName": "${PutJobPartLambdaArn}",
+                    "Payload": {
+                      "jobid.$": "$.jobid",
+                      "jobstep": "training"
+                    }
+                  },
+                  "Retry": [
+                    {
+                      "ErrorEquals": [
+                        "Lambda.ServiceException",
+                        "Lambda.AWSLambdaException",
+                        "Lambda.SdkClientException"
+                      ],
+                      "IntervalSeconds": 2,
+                      "MaxAttempts": 6,
+                      "BackoffRate": 2
+                    }
+                  ],
+                  "Next": "checktrainingstatus"
+                },
+                "checktrainingstatus": {
+                  "Type": "Task",
+                  "Resource": "arn:aws:states:::lambda:invoke",
+                  "OutputPath": "$.Payload",
+                  "Parameters": {
+                    "Payload.$": "$",
+                    "FunctionName": "${GetJobPartLambdaArn}"
+                  },
+                  "Retry": [
+                    {
+                      "ErrorEquals": [
+                        "Lambda.ServiceException",
+                        "Lambda.AWSLambdaException",
+                        "Lambda.SdkClientException"
+                      ],
+                      "IntervalSeconds": 2,
+                      "MaxAttempts": 6,
+                      "BackoffRate": 2
+                    }
+                  ],
+                  "Next": "Choice3"
+                },
+                "Choice3": {
+                  "Type": "Choice",
+                  "Choices": [
+                    {
+                      "Variable": "$.status",
+                      "StringEquals": "complete",
+                      "Next": "startendpointcreation"
+                    },
+                    {
+                      "Variable": "$.status",
+                      "StringEquals": "inprogress",
+                      "Next": "Wait (2)"
+                    }
+                  ]
+                },
+                "startendpointcreation": {
+                  "Type": "Task",
+                  "Resource": "arn:aws:states:::lambda:invoke",
+                  "OutputPath": "$.Payload",
+                  "Parameters": {
+                    "FunctionName": "${PutJobPartLambdaArn}",
+                    "Payload": {
+                      "jobid.$": "$.jobid",
+                      "jobstep": "endpoint"
+                    }
+                  },
+                  "Retry": [
+                    {
+                      "ErrorEquals": [
+                        "Lambda.ServiceException",
+                        "Lambda.AWSLambdaException",
+                        "Lambda.SdkClientException"
+                      ],
+                      "IntervalSeconds": 2,
+                      "MaxAttempts": 6,
+                      "BackoffRate": 2
+                    }
+                  ],
+                  "Next": "checkendpointcreationstatus"
+                },
+                "checkendpointcreationstatus": {
+                  "Type": "Task",
+                  "Resource": "arn:aws:states:::lambda:invoke",
+                  "OutputPath": "$.Payload",
+                  "Parameters": {
+                    "Payload.$": "$",
+                    "FunctionName": "${GetJobPartLambdaArn}"
+                  },
+                  "Retry": [
+                    {
+                      "ErrorEquals": [
+                        "Lambda.ServiceException",
+                        "Lambda.AWSLambdaException",
+                        "Lambda.SdkClientException"
+                      ],
+                      "IntervalSeconds": 2,
+                      "MaxAttempts": 6,
+                      "BackoffRate": 2
+                    }
+                  ],
+                  "Next": "Choice4"
+                },
+                "Choice4": {
+                  "Type": "Choice",
+                  "Choices": [
+                    {
+                      "Variable": "$.status",
+                      "StringEquals": "complete",
+                      "Next": "Success"
+                    },
+                    {
+                      "Variable": "$.status",
+                      "StringEquals": "inprogress",
+                      "Next": "Wait (3)"
+                    }
+                  ]
+                },
+                "Wait (1)": {
+                  "Type": "Wait",
+                  "Seconds": 60,
+                  "Next": "checkdataprocessingstatus"
+                },
+                "Success": {
+                  "Type": "Succeed"
+                },
+                "Wait": {
+                  "Type": "Wait",
+                  "Seconds": 60,
+                  "Next": "checkstartjobstatus"
+                },
+                "Fail": {
+                  "Type": "Fail"
+                },
+                "Wait (2)": {
+                  "Type": "Wait",
+                  "Seconds": 60,
+                  "Next": "checktrainingstatus"
+                },
+                "Wait (3)": {
+                  "Type": "Wait",
+                  "Seconds": 60,
+                  "Next": "checkendpointcreationstatus"
+                }
+              }
+            }
+          - {PutJobLambdaArn: !GetAtt [PutJobLambda, Arn ],PutJobPartLambdaArn: !GetAtt [ PutJobPartLambda, Arn ],GetJobPartLambdaArn: !GetAtt [ GetJobPartLambda, Arn ]}
+      RoleArn: !GetAtt [ StatesExecutionRole, Arn ]
+
   NeptuneMLOpsTable:
     Type: AWS::DynamoDB::Table
     Properties:
       TableName: !Ref NEPTUNEMLOPSDYNAMODBTABLE
+      AttributeDefinitions: 
+        - AttributeName: jobid
+          AttributeType: S
+        - AttributeName: jobstep
+          AttributeType: S
       KeySchema: 
-        - 
-          AttributeName: "jobid"
-          KeyType: "HASH"
-        - 
-          AttributeName: "jobstep"
-          KeyType: "RANGE"
+        - AttributeName: jobid
+          KeyType: HASH
+        - AttributeName: jobstep
+          KeyType: RANGE
       ProvisionedThroughput:
         ReadCapacityUnits: 2
         WriteCapacityUnits: 2

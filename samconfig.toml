@@ -2,10 +2,11 @@ version = 0.1
 [default]
 [default.deploy]
 [default.deploy.parameters]
-stack_name = "mlops"
+stack_name = "MLOpAutomation4"
 s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-vxr17cncuwft"
-s3_prefix = "mlops"
+s3_prefix = "MLOpAutomation4"
 region = "us-east-1"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
+parameter_overrides = "NEPTUNEENDPOINT=\"neptunedbcluster-l6lv2os8pavt.cluster-c9ateafzwuon.us-east-1.neptune.amazonaws.com\" NEPTUNEPORT=\"8182\" NEPTUNEEXPORTURL=\"102gm69f3f.execute-api.us-east-1.amazonaws.com\" NEPTUNEMLOPSDYNAMODBTABLE=\"mlopstesting1\""
 image_repositories = []

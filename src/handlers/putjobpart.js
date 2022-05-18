@@ -5,7 +5,6 @@ const exportserviceurl = `https://${process.env.NEPTUNEEXPORTURL}/v1/neptune-exp
 const neptuneendpoint = `https://${process.env.NEPTUNEENDPOINT}:${process.env.NEPTUNEPORT}`;
 const axios = require('axios').default;
 
-
 async function setjobstatus(jobdetails, updateexpression, expressionattributenames, expressionattributevalues) {
   var params = {
     TableName: tableName,
@@ -111,7 +110,7 @@ async function runtrainingjob(jobdetails, data) {
 
 async function runendpointcreationjob(jobdetails, data) {
   let response = await axios.post(neptuneendpoint + "/ml/endpoints", {
-    "mlModelTrainingJobId": data.Item.jobstep,
+    "mlModelTrainingJobId": data.Item.jobid,
     "id": data.Item.jobid
   });
 
@@ -147,19 +146,22 @@ exports.handler = async (event) => {
   };
 
   const data = await docClient.get(params).promise();
+  let response = null;
 
   if (data.Item.status === "pending") {
     if (jobdetails.jobstep.indexOf("export") !== -1) {
-      await runexportjob(jobdetails, data)
+      response = await runexportjob(jobdetails, data)
     }
     else if (jobdetails.jobstep.indexOf("dataprocessing") !== -1) {
-      await rundataprocessingjob(jobdetails, data)
+      response = await rundataprocessingjob(jobdetails, data)
     }
     else if (jobdetails.jobstep.indexOf("training") !== -1) {
-      await runtrainingjob(jobdetails, data);
+      response = await runtrainingjob(jobdetails, data);
     }
     else if (jobdetails.jobstep.indexOf("endpoint") !== -1) {
-      await runendpointcreationjob(jobdetails, data)
+      response = await runendpointcreationjob(jobdetails, data)
     }
   }
+  
+  return response;
 }

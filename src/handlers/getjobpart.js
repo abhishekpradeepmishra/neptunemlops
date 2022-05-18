@@ -79,7 +79,7 @@ async function getdataprocessingjobstatus(jobdetails, data) {
 }
 
 async function gettrainingjobstatus(jobdetails, data) {
-  let response = await axios.get(neptuneendpoint + "/ml/modeltraining/" + jobdetails.jobstep);
+  let response = await axios.get(neptuneendpoint + "/ml/modeltraining/" + jobdetails.jobid);
 
   if (response.data.status === "Completed") {
     await setjobstatus(jobdetails,
@@ -104,7 +104,7 @@ async function gettrainingjobstatus(jobdetails, data) {
 }
 
 async function getendpointcreationjobstatus(jobdetails, data) {
-  let response = await axios.get(neptuneendpoint + "/ml/endpoints/" + jobdetails.jobstep);
+  let response = await axios.get(neptuneendpoint + "/ml/endpoints/" + jobdetails.jobid);
 
   if (response.data.status === "InService") {
 
@@ -144,18 +144,22 @@ exports.handler = async (event) => {
 
   const data = await docClient.get(params).promise();
 
+  let response = null;
+
   if (data.Item.status === "inprogress") {
     if (jobdetails.jobstep.indexOf("export") !== -1) {
-      await getexportjobstatus(jobdetails, data);
+      response = await getexportjobstatus(jobdetails, data);
     }
     else if (jobdetails.jobstep.indexOf("dataprocessing") !== -1) {
-      await getdataprocessingjobstatus(jobdetails, data);
+      response = await getdataprocessingjobstatus(jobdetails, data);
     }
     else if (jobdetails.jobstep.indexOf("training") !== -1) {
-      await gettrainingjobstatus(jobdetails, data);
+      response = await gettrainingjobstatus(jobdetails, data);
     }
     else if (jobdetails.jobstep.indexOf("endpoint") !== -1) {
-      await getendpointcreationjobstatus(jobdetails, data)
+      response = await getendpointcreationjobstatus(jobdetails, data)
     }
   }
+
+  return response;
 }

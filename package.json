@@ -4,7 +4,7 @@
     "version": "0.0.1",
     "private": true,
     "dependencies": {
-        "aws-sdk": "^2.799.0",
+        "aws-sdk": "^2.1136.0",
         "axios": "^0.27.1",
         "mongodb": "^4.5.0",
         "uuid": "^8.3.2"

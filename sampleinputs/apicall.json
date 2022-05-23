@@ -1,0 +1,62 @@
+{
+    "title": "mljob",
+    "type": "linkprediction",
+    "s3bucket": "s3://abhmish-neptune-ml",
+    "part_export": {
+        "jobstep": "export",
+        "type": "export",
+        "jobstatus": "pending",
+        "exportparams": {
+            "command": "export-pg",
+            "params": {
+                "endpoint": "neptunedbcluster-l6lv2os8pavt.cluster-c9ateafzwuon.us-east-1.neptune.amazonaws.com",
+                "profile": "neptune_ml",
+                "cloneCluster": false
+            },
+            "outputS3Path": "/neptune-export",
+            "additionalParams": {
+                "neptune_ml": {
+                    "version": "v2.0",
+                    "features": [{
+                            "node": "movie",
+                            "property": "title",
+                            "type": "word2vec"
+                        },
+                        {
+                            "node": "user",
+                            "property": "age",
+                            "type": "bucket_numerical",
+                            "range": [
+                                1,
+                                100
+                            ],
+                            "num_buckets": 10
+                        }
+                    ]
+                }
+            },
+            "jobSize": "medium"
+        }
+    },
+    "part_dataprocessing": {
+        "jobstep": "dataprocessing",
+        "config_file_name": "training-data-configuration.json",
+        "s3_input_uri": "",
+        "s3_processed_uri": "/preloading",
+        "jobstatus": "pending"
+    },
+    "part_training": {
+        "jobstep": "training",
+        "data_processing_id": "training",
+        "instance_type": "ml.p3.2xlarge",
+        "s3_output_uri": "/training",
+        "max_hpo_number": 2,
+        "max_hpo_parallel": 2,
+        "jobstatus": "pending"
+    },
+    "part_endpoint": {
+        "jobstep": "endpoint",
+        "model_training_jobstep": "endpoint",
+        "jobstatus": "pending"
+    }
+}

@@ -6,22 +6,14 @@ const neptuneendpoint = `https://${process.env.NEPTUNEENDPOINT}:${process.env.NE
 const axios = require('axios').default;
 const { v4: uuidv4 } = require('uuid');
 exports.handler = async (event) => {
-    // if (event.httpMethod !== 'POST') {
-    //     throw new Error(`postMethod only accepts POST method, you tried: ${event.httpMethod} method.`);
-    // }
-    
-    console.log(tableName)
-    
     console.info('received:', event);
-    //const job = JSON.parse(event.body);
     const job = event;
-    // job.jobid = `mljob-${uuidv4()}`;
-    // job.createdtimestamp = (new Date()).getTime();
-
     var params = {
         RequestItems: {}
     };
 
+    job.part_export.exportparams.outputS3Path = `${job.s3bucket}/${job.part_export.exportparams.outputS3Path}`;
+    
     params.RequestItems[tableName] = [{
             PutRequest: {
                 Item: {
@@ -44,7 +36,7 @@ exports.handler = async (event) => {
                     type: job.type,
                     createdtimestamp: job.createdtimestamp,
                     configfilename: job.part_dataprocessing.config_file_name,
-                    s3_input_uri: job.part_dataprocessing.s3_input_uri,
+                    s3_input_uri: `${job.s3bucket}/${job.part_dataprocessing.s3_input_uri}`,
                     s3_processed_uri: job.part_dataprocessing.s3_processed_uri
                 }
             }
@@ -59,7 +51,7 @@ exports.handler = async (event) => {
                     createdtimestamp: job.createdtimestamp,
                     data_processing_id: job.part_training.data_processing_id,
                     instance_type: job.part_training.instance_type,
-                    s3_output_uri: job.part_training.s3_output_uri,
+                    s3_output_uri: `${job.s3bucket}/${job.part_training.s3_output_uri}`,
                     max_hpo_number: job.part_training.max_hpo_number,
                     max_hpo_parallel: job.part_training.max_hpo_parallel
                 }
@@ -88,8 +80,7 @@ exports.handler = async (event) => {
             jobid: job.jobid
         }
     };
-
-    // All log statements are written to CloudWatch
+    
     console.info(`response from: ${event.path} statusCode: ${response.statusCode} body: ${response.body}`);
     return response;
 };

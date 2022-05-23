@@ -1,0 +1,346 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Cloudformation template to created Automated ML Pipeline for Neptune
+  ML
+Transform:
+- AWS::Serverless-2016-10-31
+Parameters:
+  NEPTUNEENDPOINT:
+    Description: Neptune cluster endpoint
+    Type: String
+  NEPTUNEPORT:
+    Description: Neptune cluster port
+    Type: String
+  NEPTUNEEXPORTURL:
+    Description: Neptune export service  api endpoint. You can find the URL for Neptune
+      export service from API Gateway console where Neptune Export Service is deployed
+    Type: String
+  NEPTUNEMLOPSDYNAMODBTABLE:
+    Description: Neptune ML Ops DynamoDB table
+    Type: String
+  SECURITYGROUP:
+    Description: Secuity Group for AWS Lambda functions to connect to Neptune Instance
+    Type: String
+  SUBNET1:
+    Description: Subnet to attach to AWS Lambda function
+    Type: String
+  SUBNET2:
+    Description: Subnet to attach to AWS Lambda function
+    Type: String
+Resources:
+  PutJobLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/putjob.handler
+      Runtime: nodejs14.x
+      Architectures:
+      - x86_64
+      MemorySize: 128
+      Timeout: 100
+      Description: Lambda function to configure ML Job Pipeline
+      Policies:
+      - AWSLambda_FullAccess
+      - NeptuneFullAccess
+      - AmazonDynamoDBFullAccess
+      - AmazonSageMakerFullAccess
+      - AmazonAPIGatewayInvokeFullAccess
+      Environment:
+        Variables:
+          NEPTUNEENDPOINT:
+            Ref: NEPTUNEENDPOINT
+          NEPTUNEPORT:
+            Ref: NEPTUNEPORT
+          NEPTUNEEXPORTURL:
+            Ref: NEPTUNEEXPORTURL
+          NEPTUNEMLOPSDYNAMODBTABLE:
+            Ref: NEPTUNEMLOPSDYNAMODBTABLE
+      VpcConfig:
+        SecurityGroupIds:
+        - Ref: SECURITYGROUP
+        SubnetIds:
+        - Ref: SUBNET1
+        - Ref: SUBNET2
+      CodeUri: s3://abhmish-aws-neptune-customer-samples/neptune-export/install/lambda//1bfe6bd8fb9fc91a9dddd839b0f892f4
+  PutJobPartLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/putjobpart.handler
+      Runtime: nodejs14.x
+      Architectures:
+      - x86_64
+      MemorySize: 128
+      Timeout: 100
+      Description: Lambda function to start each Job step in the workflow
+      Policies:
+      - AWSLambda_FullAccess
+      - NeptuneFullAccess
+      - AmazonDynamoDBFullAccess
+      - AmazonSageMakerFullAccess
+      - AmazonAPIGatewayInvokeFullAccess
+      VpcConfig:
+        SecurityGroupIds:
+        - Ref: SECURITYGROUP
+        SubnetIds:
+        - Ref: SUBNET1
+        - Ref: SUBNET2
+      Environment:
+        Variables:
+          NEPTUNEENDPOINT:
+            Ref: NEPTUNEENDPOINT
+          NEPTUNEPORT:
+            Ref: NEPTUNEPORT
+          NEPTUNEEXPORTURL:
+            Ref: NEPTUNEEXPORTURL
+          NEPTUNEMLOPSDYNAMODBTABLE:
+            Ref: NEPTUNEMLOPSDYNAMODBTABLE
+      CodeUri: s3://abhmish-aws-neptune-customer-samples/neptune-export/install/lambda//1bfe6bd8fb9fc91a9dddd839b0f892f4
+  GetJobPartLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/getjobpart.handler
+      Runtime: nodejs14.x
+      Architectures:
+      - x86_64
+      MemorySize: 128
+      Timeout: 100
+      Description: Lambda function to get status of each job in the workflow
+      Policies:
+      - AWSLambda_FullAccess
+      - NeptuneFullAccess
+      - AmazonDynamoDBFullAccess
+      - AmazonSageMakerFullAccess
+      - AmazonAPIGatewayInvokeFullAccess
+      VpcConfig:
+        SecurityGroupIds:
+        - Ref: SECURITYGROUP
+        SubnetIds:
+        - Ref: SUBNET1
+        - Ref: SUBNET2
+      Environment:
+        Variables:
+          NEPTUNEENDPOINT:
+            Ref: NEPTUNEENDPOINT
+          NEPTUNEPORT:
+            Ref: NEPTUNEPORT
+          NEPTUNEEXPORTURL:
+            Ref: NEPTUNEEXPORTURL
+          NEPTUNEMLOPSDYNAMODBTABLE:
+            Ref: NEPTUNEMLOPSDYNAMODBTABLE
+      CodeUri: s3://abhmish-aws-neptune-customer-samples/neptune-export/install/lambda//1bfe6bd8fb9fc91a9dddd839b0f892f4
+  InvokeStepFunctionLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/invokestepfunction.handler
+      Runtime: nodejs14.x
+      Architectures:
+      - x86_64
+      MemorySize: 128
+      Timeout: 100
+      Description: Lambda function to invoke the step function workflow
+      Policies:
+      - AWSLambda_FullAccess
+      - NeptuneFullAccess
+      - AmazonDynamoDBFullAccess
+      - AmazonSageMakerFullAccess
+      - AmazonAPIGatewayInvokeFullAccess
+      - AWSStepFunctionsFullAccess
+      VpcConfig:
+        SecurityGroupIds:
+        - Ref: SECURITYGROUP
+        SubnetIds:
+        - Ref: SUBNET1
+        - Ref: SUBNET2
+      Environment:
+        Variables:
+          STEPFUNCTIONARN:
+            Fn::GetAtt:
+            - MLOpsSateMachine
+            - Arn
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /
+            Method: POST
+      CodeUri: s3://abhmish-aws-neptune-customer-samples/neptune-export/install/lambda//1bfe6bd8fb9fc91a9dddd839b0f892f4
+  StatesExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - Fn::Sub: states.${AWS::Region}.amazonaws.com
+          Action: sts:AssumeRole
+      Path: /
+      Policies:
+      - PolicyName: StatesExecutionPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - lambda:InvokeFunction
+            Resource: '*'
+  MLOpsSateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      DefinitionString:
+        Fn::Sub:
+        - "{\n  \"Comment\": \"A description of my state machine\",\n  \"StartAt\"\
+          : \"putmljob\",\n  \"States\": {\n    \"putmljob\": {\n      \"Type\": \"\
+          Task\",\n      \"Resource\": \"arn:aws:states:::lambda:invoke\",\n     \
+          \ \"OutputPath\": \"$.Payload\",\n      \"Parameters\": {\n         \"FunctionName\"\
+          : \"${PutJobLambdaArn}\",\n        \"Payload.$\": \"$\"\n      },\n    \
+          \  \"Retry\": [\n        {\n          \"ErrorEquals\": [\n            \"\
+          Lambda.ServiceException\",\n            \"Lambda.AWSLambdaException\",\n\
+          \            \"Lambda.SdkClientException\"\n          ],\n          \"IntervalSeconds\"\
+          : 2,\n          \"MaxAttempts\": 6,\n          \"BackoffRate\": 2\n    \
+          \    }\n      ],\n      \"Next\": \"Choice\"\n    },\n    \"Choice\": {\n\
+          \      \"Type\": \"Choice\",\n      \"Choices\": [\n        {\n        \
+          \  \"Variable\": \"$.statusCode\",\n          \"NumericEquals\": 200,\n\
+          \          \"Next\": \"startexport\"\n        }\n      ],\n      \"Default\"\
+          : \"Fail\"\n    },\n    \"startexport\": {\n      \"Type\": \"Task\",\n\
+          \      \"Resource\": \"arn:aws:states:::lambda:invoke\",\n      \"OutputPath\"\
+          : \"$.Payload\",\n      \"Parameters\": {\n        \"FunctionName\": \"\
+          ${PutJobPartLambdaArn}\",\n        \"Payload\": {\n          \"jobid.$\"\
+          : \"$.body.jobid\",\n          \"jobstep\": \"export\"\n        }\n    \
+          \  },\n      \"Retry\": [\n        {\n          \"ErrorEquals\": [\n   \
+          \         \"Lambda.ServiceException\",\n            \"Lambda.AWSLambdaException\"\
+          ,\n            \"Lambda.SdkClientException\"\n          ],\n          \"\
+          IntervalSeconds\": 2,\n          \"MaxAttempts\": 6,\n          \"BackoffRate\"\
+          : 2\n        }\n      ],\n      \"Next\": \"checkstartjobstatus\"\n    },\n\
+          \    \"checkstartjobstatus\": {\n      \"Type\": \"Task\",\n      \"Resource\"\
+          : \"arn:aws:states:::lambda:invoke\",\n      \"OutputPath\": \"$.Payload\"\
+          ,\n      \"Parameters\": {\n        \"Payload.$\": \"$\",\n        \"FunctionName\"\
+          : \"${GetJobPartLambdaArn}\"\n      },\n      \"Retry\": [\n        {\n\
+          \          \"ErrorEquals\": [\n            \"Lambda.ServiceException\",\n\
+          \            \"Lambda.AWSLambdaException\",\n            \"Lambda.SdkClientException\"\
+          \n          ],\n          \"IntervalSeconds\": 2,\n          \"MaxAttempts\"\
+          : 6,\n          \"BackoffRate\": 2\n        }\n      ],\n      \"Next\"\
+          : \"Choice1\"\n    },\n    \"Choice1\": {\n      \"Type\": \"Choice\",\n\
+          \      \"Choices\": [\n        {\n          \"Variable\": \"$.status\",\n\
+          \          \"StringEquals\": \"complete\",\n          \"Next\": \"startdataprocessing\"\
+          \n        },\n        {\n          \"Variable\": \"$.status\",\n       \
+          \   \"StringEquals\": \"inprogress\",\n          \"Next\": \"Wait\"\n  \
+          \      }\n      ]\n    },\n    \"startdataprocessing\": {\n      \"Type\"\
+          : \"Task\",\n      \"Resource\": \"arn:aws:states:::lambda:invoke\",\n \
+          \     \"OutputPath\": \"$.Payload\",\n      \"Parameters\": {\n        \"\
+          FunctionName\": \"${PutJobPartLambdaArn}\",\n        \"Payload\": {\n  \
+          \        \"jobid.$\": \"$.jobid\",\n          \"jobstep\": \"dataprocessing\"\
+          ,\n          \"s3_input_uri.$\": \"$.outputS3Uri\"\n        }\n      },\n\
+          \      \"Retry\": [\n        {\n          \"ErrorEquals\": [\n         \
+          \   \"Lambda.ServiceException\",\n            \"Lambda.AWSLambdaException\"\
+          ,\n            \"Lambda.SdkClientException\"\n          ],\n          \"\
+          IntervalSeconds\": 2,\n          \"MaxAttempts\": 6,\n          \"BackoffRate\"\
+          : 2\n        }\n      ],\n      \"Next\": \"checkdataprocessingstatus\"\n\
+          \    },\n    \"checkdataprocessingstatus\": {\n      \"Type\": \"Task\"\
+          ,\n      \"Resource\": \"arn:aws:states:::lambda:invoke\",\n      \"OutputPath\"\
+          : \"$.Payload\",\n      \"Parameters\": {\n        \"Payload.$\": \"$\"\
+          ,\n        \"FunctionName\": \"${GetJobPartLambdaArn}\"\n      },\n    \
+          \  \"Retry\": [\n        {\n          \"ErrorEquals\": [\n            \"\
+          Lambda.ServiceException\",\n            \"Lambda.AWSLambdaException\",\n\
+          \            \"Lambda.SdkClientException\"\n          ],\n          \"IntervalSeconds\"\
+          : 2,\n          \"MaxAttempts\": 6,\n          \"BackoffRate\": 2\n    \
+          \    }\n      ],\n      \"Next\": \"Choice2\"\n    },\n    \"Choice2\":\
+          \ {\n      \"Type\": \"Choice\",\n      \"Choices\": [\n        {\n    \
+          \      \"Variable\": \"$.status\",\n          \"StringEquals\": \"complete\"\
+          ,\n          \"Next\": \"starttrainingjob\"\n        },\n        {\n   \
+          \       \"Variable\": \"$.status\",\n          \"StringEquals\": \"inprogress\"\
+          ,\n          \"Next\": \"Wait (1)\"\n        }\n      ]\n    },\n    \"\
+          starttrainingjob\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"\
+          arn:aws:states:::lambda:invoke\",\n      \"OutputPath\": \"$.Payload\",\n\
+          \      \"Parameters\": {\n        \"FunctionName\": \"${PutJobPartLambdaArn}\"\
+          ,\n        \"Payload\": {\n          \"jobid.$\": \"$.jobid\",\n       \
+          \   \"jobstep\": \"training\"\n        }\n      },\n      \"Retry\": [\n\
+          \        {\n          \"ErrorEquals\": [\n            \"Lambda.ServiceException\"\
+          ,\n            \"Lambda.AWSLambdaException\",\n            \"Lambda.SdkClientException\"\
+          \n          ],\n          \"IntervalSeconds\": 2,\n          \"MaxAttempts\"\
+          : 6,\n          \"BackoffRate\": 2\n        }\n      ],\n      \"Next\"\
+          : \"checktrainingstatus\"\n    },\n    \"checktrainingstatus\": {\n    \
+          \  \"Type\": \"Task\",\n      \"Resource\": \"arn:aws:states:::lambda:invoke\"\
+          ,\n      \"OutputPath\": \"$.Payload\",\n      \"Parameters\": {\n     \
+          \   \"Payload.$\": \"$\",\n        \"FunctionName\": \"${GetJobPartLambdaArn}\"\
+          \n      },\n      \"Retry\": [\n        {\n          \"ErrorEquals\": [\n\
+          \            \"Lambda.ServiceException\",\n            \"Lambda.AWSLambdaException\"\
+          ,\n            \"Lambda.SdkClientException\"\n          ],\n          \"\
+          IntervalSeconds\": 2,\n          \"MaxAttempts\": 6,\n          \"BackoffRate\"\
+          : 2\n        }\n      ],\n      \"Next\": \"Choice3\"\n    },\n    \"Choice3\"\
+          : {\n      \"Type\": \"Choice\",\n      \"Choices\": [\n        {\n    \
+          \      \"Variable\": \"$.status\",\n          \"StringEquals\": \"complete\"\
+          ,\n          \"Next\": \"startendpointcreation\"\n        },\n        {\n\
+          \          \"Variable\": \"$.status\",\n          \"StringEquals\": \"inprogress\"\
+          ,\n          \"Next\": \"Wait (2)\"\n        }\n      ]\n    },\n    \"\
+          startendpointcreation\": {\n      \"Type\": \"Task\",\n      \"Resource\"\
+          : \"arn:aws:states:::lambda:invoke\",\n      \"OutputPath\": \"$.Payload\"\
+          ,\n      \"Parameters\": {\n        \"FunctionName\": \"${PutJobPartLambdaArn}\"\
+          ,\n        \"Payload\": {\n          \"jobid.$\": \"$.jobid\",\n       \
+          \   \"jobstep\": \"endpoint\"\n        }\n      },\n      \"Retry\": [\n\
+          \        {\n          \"ErrorEquals\": [\n            \"Lambda.ServiceException\"\
+          ,\n            \"Lambda.AWSLambdaException\",\n            \"Lambda.SdkClientException\"\
+          \n          ],\n          \"IntervalSeconds\": 2,\n          \"MaxAttempts\"\
+          : 6,\n          \"BackoffRate\": 2\n        }\n      ],\n      \"Next\"\
+          : \"checkendpointcreationstatus\"\n    },\n    \"checkendpointcreationstatus\"\
+          : {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:aws:states:::lambda:invoke\"\
+          ,\n      \"OutputPath\": \"$.Payload\",\n      \"Parameters\": {\n     \
+          \   \"Payload.$\": \"$\",\n        \"FunctionName\": \"${GetJobPartLambdaArn}\"\
+          \n      },\n      \"Retry\": [\n        {\n          \"ErrorEquals\": [\n\
+          \            \"Lambda.ServiceException\",\n            \"Lambda.AWSLambdaException\"\
+          ,\n            \"Lambda.SdkClientException\"\n          ],\n          \"\
+          IntervalSeconds\": 2,\n          \"MaxAttempts\": 6,\n          \"BackoffRate\"\
+          : 2\n        }\n      ],\n      \"Next\": \"Choice4\"\n    },\n    \"Choice4\"\
+          : {\n      \"Type\": \"Choice\",\n      \"Choices\": [\n        {\n    \
+          \      \"Variable\": \"$.status\",\n          \"StringEquals\": \"complete\"\
+          ,\n          \"Next\": \"Success\"\n        },\n        {\n          \"\
+          Variable\": \"$.status\",\n          \"StringEquals\": \"inprogress\",\n\
+          \          \"Next\": \"Wait (3)\"\n        }\n      ]\n    },\n    \"Wait\
+          \ (1)\": {\n      \"Type\": \"Wait\",\n      \"Seconds\": 60,\n      \"\
+          Next\": \"checkdataprocessingstatus\"\n    },\n    \"Success\": {\n    \
+          \  \"Type\": \"Succeed\"\n    },\n    \"Wait\": {\n      \"Type\": \"Wait\"\
+          ,\n      \"Seconds\": 60,\n      \"Next\": \"checkstartjobstatus\"\n   \
+          \ },\n    \"Fail\": {\n      \"Type\": \"Fail\"\n    },\n    \"Wait (2)\"\
+          : {\n      \"Type\": \"Wait\",\n      \"Seconds\": 60,\n      \"Next\":\
+          \ \"checktrainingstatus\"\n    },\n    \"Wait (3)\": {\n      \"Type\":\
+          \ \"Wait\",\n      \"Seconds\": 60,\n      \"Next\": \"checkendpointcreationstatus\"\
+          \n    }\n  }\n}"
+        - PutJobLambdaArn:
+            Fn::GetAtt:
+            - PutJobLambda
+            - Arn
+          PutJobPartLambdaArn:
+            Fn::GetAtt:
+            - PutJobPartLambda
+            - Arn
+          GetJobPartLambdaArn:
+            Fn::GetAtt:
+            - GetJobPartLambda
+            - Arn
+      RoleArn:
+        Fn::GetAtt:
+        - StatesExecutionRole
+        - Arn
+  NeptuneMLOpsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        Ref: NEPTUNEMLOPSDYNAMODBTABLE
+      AttributeDefinitions:
+      - AttributeName: jobid
+        AttributeType: S
+      - AttributeName: jobstep
+        AttributeType: S
+      KeySchema:
+      - AttributeName: jobid
+        KeyType: HASH
+      - AttributeName: jobstep
+        KeyType: RANGE
+      ProvisionedThroughput:
+        ReadCapacityUnits: 2
+        WriteCapacityUnits: 2
+Outputs:
+  WebEndpoint:
+    Description: API Gateway endpoint URL for Prod stage
+    Value:
+      Fn::Sub: https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/
+

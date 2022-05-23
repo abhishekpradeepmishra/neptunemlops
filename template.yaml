@@ -1,6 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: >-
-  mlpipeline
+Description: Cloudformation template to created Automated ML Pipeline for Neptune ML
 Transform:
 - AWS::Serverless-2016-10-31
 
@@ -8,19 +7,24 @@ Parameters:
   NEPTUNEENDPOINT: 
     Description: "Neptune cluster endpoint"
     Type: String
-    Default: "neptunedbcluster-l6lv2os8pavt.cluster-c9ateafzwuon.us-east-1.neptune.amazonaws.com"
   NEPTUNEPORT: 
     Description: "Neptune cluster port"
     Type: String
-    Default: "8182"
   NEPTUNEEXPORTURL:
-    Description: "Neptune export service  api endpoint"
+    Description: "Neptune export service  api endpoint. You can find the URL for Neptune export service from API Gateway console where Neptune Export Service is deployed"
     Type: String
-    Default: "102gm69f3f.execute-api.us-east-1.amazonaws.com"
   NEPTUNEMLOPSDYNAMODBTABLE:
     Description: "Neptune ML Ops DynamoDB table"
     Type: String
-    Default: "mlopstesting1"
+  SECURITYGROUP:
+    Description: "Secuity Group for AWS Lambda functions to connect to Neptune Instance"
+    Type: String
+  SUBNET1:
+    Description: "Subnet to attach to AWS Lambda function"
+    Type: String
+  SUBNET2:
+    Description: "Subnet to attach to AWS Lambda function"
+    Type: String
 Resources:
   PutJobLambda:
     Type: AWS::Serverless::Function
@@ -31,7 +35,7 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 100
-      Description: A simple example includes a HTTP get method to get all items from a DynamoDB table.
+      Description: Lambda function to configure ML Job Pipeline
       Policies:
         - AWSLambda_FullAccess
         - NeptuneFullAccess
@@ -46,10 +50,10 @@ Resources:
           NEPTUNEMLOPSDYNAMODBTABLE: !Ref NEPTUNEMLOPSDYNAMODBTABLE
       VpcConfig:
           SecurityGroupIds:
-            - sg-0cc09d92491c9dce6
+            - !Ref SECURITYGROUP
           SubnetIds:
-            - subnet-091f9505f45835a38
-            - subnet-0ff5ada7270358a80
+            - !Ref SUBNET1
+            - !Ref SUBNET2
 
   PutJobPartLambda:
     Type: AWS::Serverless::Function
@@ -60,9 +64,8 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 100
-      Description: ML Op.
+      Description: Lambda function to start each Job step in the workflow
       Policies:
-        # Give Create/Read/Update/Delete Permissions to the SampleTable
         - AWSLambda_FullAccess
         - NeptuneFullAccess
         - AmazonDynamoDBFullAccess
@@ -70,10 +73,10 @@ Resources:
         - AmazonAPIGatewayInvokeFullAccess
       VpcConfig:
           SecurityGroupIds:
-            - sg-0cc09d92491c9dce6
+            - !Ref SECURITYGROUP
           SubnetIds:
-            - subnet-091f9505f45835a38
-            - subnet-0ff5ada7270358a80
+            - !Ref SUBNET1
+            - !Ref SUBNET2
       Environment:
         Variables:
           NEPTUNEENDPOINT: !Ref NEPTUNEENDPOINT
@@ -90,7 +93,7 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 100
-      Description: A simple example includes a HTTP post method to add one item to a DynamoDB table.
+      Description: Lambda function to get status of each job in the workflow
       Policies:
         # Give Create/Read/Update/Delete Permissions to the SampleTable
         - AWSLambda_FullAccess
@@ -100,10 +103,10 @@ Resources:
         - AmazonAPIGatewayInvokeFullAccess
       VpcConfig:
           SecurityGroupIds:
-            - sg-0cc09d92491c9dce6
+            - !Ref SECURITYGROUP
           SubnetIds:
-            - subnet-091f9505f45835a38
-            - subnet-0ff5ada7270358a80
+            - !Ref SUBNET1
+            - !Ref SUBNET2
       Environment:
         Variables:
           NEPTUNEENDPOINT: !Ref NEPTUNEENDPOINT
@@ -120,9 +123,8 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 100
-      Description: ML Op.
+      Description: Lambda function to invoke the step function workflow
       Policies:
-        # Give Create/Read/Update/Delete Permissions to the SampleTable
         - AWSLambda_FullAccess
         - NeptuneFullAccess
         - AmazonDynamoDBFullAccess
@@ -131,10 +133,10 @@ Resources:
         - AWSStepFunctionsFullAccess
       VpcConfig:
           SecurityGroupIds:
-            - sg-0cc09d92491c9dce6
+            - !Ref SECURITYGROUP
           SubnetIds:
-            - subnet-091f9505f45835a38
-            - subnet-0ff5ada7270358a80
+            - !Ref SUBNET1
+            - !Ref SUBNET2
       Environment:
         Variables:
           STEPFUNCTIONARN: !GetAtt [MLOpsSateMachine, Arn ]

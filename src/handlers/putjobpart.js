@@ -20,7 +20,6 @@ async function setjobstatus(jobdetails, updateexpression, expressionattributenam
   await docClient.update(params).promise();
 }
 
-
 async function runexportjob(jobdetails, data) {
   let exportparams = JSON.parse(data.Item.exportparams);
   let response = await axios.post(exportserviceurl, exportparams);

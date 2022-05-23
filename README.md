@@ -5,4 +5,4 @@ With Neptune ML, you can improve the accuracy of most predictions for graphs by 
 
 ## Neptune ML State Machine
 
-![](./stepfunctions.png)
+![](stepfunctions.png)

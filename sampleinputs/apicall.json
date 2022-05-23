@@ -1,7 +1,7 @@
 {
     "title": "mljob",
     "type": "linkprediction",
-    "s3bucket": "s3://abhmish-neptune-ml",
+    "s3bucket": "s3://<s3 bucket name>",
     "part_export": {
         "jobstep": "export",
         "type": "export",
@@ -9,7 +9,7 @@
         "exportparams": {
             "command": "export-pg",
             "params": {
-                "endpoint": "neptunedbcluster-l6lv2os8pavt.cluster-c9ateafzwuon.us-east-1.neptune.amazonaws.com",
+                "endpoint": "<neptune-cluster-endpoint>",
                 "profile": "neptune_ml",
                 "cloneCluster": false
             },

@@ -6,3 +6,21 @@ With Neptune ML, you can improve the accuracy of most predictions for graphs by 
 ## Neptune ML State Machine
 
 ![](stepfunctions.png)
+
+## Install SAM
+
+https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install-mac.html
+
+## Build
+
+```
+sam build
+
+```
+
+## Deploy
+
+```
+sam deploy --guided
+
+```

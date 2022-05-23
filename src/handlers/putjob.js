@@ -37,7 +37,7 @@ exports.handler = async (event) => {
                     createdtimestamp: job.createdtimestamp,
                     configfilename: job.part_dataprocessing.config_file_name,
                     s3_input_uri: `${job.s3bucket}/${job.part_dataprocessing.s3_input_uri}`,
-                    s3_processed_uri: job.part_dataprocessing.s3_processed_uri
+                    s3_processed_uri: `${job.s3bucket}/${job.part_dataprocessing.s3_processed_uri}`
                 }
             }
         },

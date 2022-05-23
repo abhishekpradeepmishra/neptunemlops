@@ -13,7 +13,7 @@
                 "profile": "neptune_ml",
                 "cloneCluster": false
             },
-            "outputS3Path": "/neptune-export",
+            "outputS3Path": "neptune-export",
             "additionalParams": {
                 "neptune_ml": {
                     "version": "v2.0",
@@ -42,14 +42,14 @@
         "jobstep": "dataprocessing",
         "config_file_name": "training-data-configuration.json",
         "s3_input_uri": "",
-        "s3_processed_uri": "/preloading",
+        "s3_processed_uri": "preloading",
         "jobstatus": "pending"
     },
     "part_training": {
         "jobstep": "training",
         "data_processing_id": "training",
         "instance_type": "ml.p3.2xlarge",
-        "s3_output_uri": "/training",
+        "s3_output_uri": "training",
         "max_hpo_number": 2,
         "max_hpo_parallel": 2,
         "jobstatus": "pending"

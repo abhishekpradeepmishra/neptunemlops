@@ -5,7 +5,6 @@ const exportserviceurl = `https://${process.env.NEPTUNEEXPORTURL}/v1/neptune-exp
 const neptuneendpoint = `https://${process.env.NEPTUNEENDPOINT}:${process.env.NEPTUNEPORT}`;
 const axios = require('axios').default;
 
-
 async function setjobstatus(jobdetails, updateexpression, expressionattributenames, expressionattributevalues) {
   var params = {
     TableName: tableName,

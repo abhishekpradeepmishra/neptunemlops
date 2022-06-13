@@ -9,20 +9,26 @@ Neptune ML Ops automates the process of creating and managing one/multiple Neptu
 
 ![](stepfunctions.png)
 
-## Install SAM
+## Install Nodejs & SAM
 
+https://nodejs.org/en/download/
 https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install-mac.html
 
 ## Build
 
+Do a git clone of the repository locally. Navigate to the root folder of the repo and run commands below
+
 ```
+npm install
 sam build
 
 ```
 
-## Deploy
+## Deployment
 
 ```
 sam deploy --guided
 
 ```
+
+
